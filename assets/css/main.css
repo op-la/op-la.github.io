@@ -98,26 +98,40 @@ h6 {
 .CHATFRAME{
 
     width: 100vw;  /* Full viewport width */
-    height: 100vh; /* Full viewport height */
+    height: 90vh; /* Full viewport height */
     position: fixed; /* Ensures it stays in place */
-    top: 0;
+    top: 0; 
     left: 0;
 
 }
-
 .overlay {
-  position: fixed; /* Stays at the top */
+  position: fixed;
   top: 0;
   left: 0;
-  width: 100vw; /* Full width */
-  height: 60px; /* 10% of the viewport height */
-  background-color: rgb(0, 0, 0); /* Slight transparency */
-  z-index: 9999; /* Ensure it's above everything */
-  pointer-events: none; /* Prevent it from blocking clicks */
-  text-align: center;
-  
+  width: 100vw;
+  height: 70px;
+  background: radial-gradient(circle, rgb(37, 2, 75) 30%, rgb(3, 41, 90) 70%);
+  z-index: 9999;
+  display: flex; /* Enables flexbox */
+  align-items: center; /* Vertically centers items */
+  justify-content: space-between; /* Aligns items to opposite sides */
+  padding: 0 20px; /* Adds some spacing */
 }
 
+
+
+.overlay h3 {
+  flex-grow: 1; /* Ensures it takes remaining space */
+  text-align: center; /* Centers text */
+}
+.overlay span {
+  font-size: 20px;
+  font-weight: bold;
+  background: linear-gradient(90deg, rgba(200, 220, 255, 1) 20%, rgba(100, 150, 255, 1) 80%);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
 
 
 .php-email-form .sent-message {
@@ -797,6 +811,44 @@ h6 {
   margin-top: 6px;
   font-size: 13px;
 }
+.footer2 {
+  color: var(--default-color);
+  background: radial-gradient(circle, rgb(4, 3, 63) 30%, rgba(0, 0, 0, 1) 80%);
+  font-size: 14px;
+  
+  width: 100vw; /* Ensure it spans the full width */
+  height: 10vh; /* 10% of the viewport height */
+  position: fixed; /* Keep it anchored to the bottom */
+  bottom: 0; /* Stick it to the bottom */
+  left: 0;
+  z-index: 999; /* Ensure it's layered correctly */
+  display: flex;
+  align-items: center; /* Centers content vertically */
+  justify-content: center; /* Centers content horizontally */
+  text-align: center;
+}
+.footer2 p {
+  font-size: calc(1.0vh + 0.5vw); /* Scales with viewport size */
+  font-weight: 500; /* Slightly bold for visibility */
+  color: white; /* Stands out against the dark gradient */
+}
+
+
+
+.footer2 .footer-top {
+  padding-top: 50px;
+  border-top: 1px solid color-mix(in srgb, var(--default-color), transparent 90%);
+}
+.footer2 .copyright {
+  padding: 25px 0;
+  border-top: 1px solid color-mix(in srgb, var(--default-color), transparent 90%);
+}
+
+.footer2 .copyright p {
+  margin-bottom: 0;
+}
+
+
 
 /*--------------------------------------------------------------
 # Preloader

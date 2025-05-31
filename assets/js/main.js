@@ -59,11 +59,14 @@
    */
   const preloader = document.querySelector('#preloader');
   if (preloader) {
-    window.addEventListener('load', () => {
+    const removePreloader = () => {
+      console.log("Removing preloader...");
       preloader.remove();
-    });
+    };
+  
+    window.addEventListener('load', removePreloader);
+    setTimeout(removePreloader, 15000);
   }
-
   /**
    * Scroll top button
    */
