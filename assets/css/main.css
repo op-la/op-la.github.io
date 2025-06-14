@@ -98,7 +98,7 @@ h6 {
 .CHATFRAME{
 
     width: 100vw;  /* Full viewport width */
-    height: 90vh; /* Full viewport height */
+    height: 80vh; /* Full viewport height */
     position: fixed; /* Ensures it stays in place */
     top: 0; 
     left: 0;
