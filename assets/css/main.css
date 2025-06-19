@@ -98,7 +98,7 @@ h6 {
 .CHATFRAME{
 
     width: 100vw;  /* Full viewport width */
-    height: 80vh; /* Full viewport height */
+    height: 90vh; /* Full viewport height */
     position: fixed; /* Ensures it stays in place */
     top: 0; 
     left: 0;
@@ -260,6 +260,7 @@ h6 {
   --background-color: rgba(0, 0, 0, 0);
   --default-color: #ffffff;
   --heading-color: #ffffff;
+  
   color: var(--default-color);
   background-color: var(--background-color);
   padding: 20px 0;
@@ -274,6 +275,7 @@ h6 {
 .header .logo img {
   max-height: 36px;
   margin-right: 8px;
+
 }
 
 .header .logo h1 {

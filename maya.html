@@ -9,8 +9,8 @@
   <meta name="keywords" content="">
 
   <!-- Favicons -->
-  <link href="assets/img/portfolio/image_fx_.jpg" rel="icon">
-  <link href="assets/img/portfolio/image_fx_.jpg" rel="apple-touch-icon">
+  <link href="assets/img/portfolio/geo13.png" rel="icon">
+  <link href="assets/img/portfolio/geo13.png" rel="apple-touch-icon">
 
   <!-- Fonts -->
   <link href="https://fonts.googleapis.com" rel="preconnect">
@@ -30,23 +30,61 @@
 
 </head>
 
+<style>
+ .header {
+    background: url('assets/img/portfolio/Banner.jpg') center/cover no-repeat;
+    position: relative;
+}
+
+.header::before {
+    content: "";
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%;
+    height: 100%;
+    backdrop-filter: blur(5px);
+    background-color: rgba(0, 0, 0, 0.5); /* black tint with transparency */
+    z-index: 1;
+}
+
+.header > * {
+    position: relative;
+    z-index: 2;
+}
+
+</style>
+
 <body class="index-page">
 
   <header id="header" class="header d-flex align-items-center fixed-top">
+
     <div class="container-fluid container-xl position-relative d-flex align-items-center">
+      <div class="logo geo-profile me-auto d-flex align-items-center" style="gap: 12px;">
+        <div class="geo-avatar position-relative" style="width: 44px; height: 44px; border-radius: 50%; overflow: hidden;">
+          <img src="assets/img/portfolio/image_fx_.jpg" alt="GEO 14" style="width: 100%; height: 100%; object-fit: cover;">
+          <div class="online-dot" style="position: absolute; bottom: 3px; right: 3px; width: 10px; height: 10px; background: #00c853; border: 2px solid #000; border-radius: 50%;"></div>
+        </div>
+        <div class="logo geo-label" style="color: white; font-weight: 600; font-size: 16px;">Maya 7</div>
+      </div>
+    </div>
+    
+
 
       <a href="index.html" class="logo d-flex align-items-center me-auto">
         <!-- Uncomment the line below if you also wish to use an image logo -->
         <img src="assets/img/op.png" alt="">
-        <h1 class="sitename">OP la!</h1>
+      
       </a>
+      <!-- GEO 14 Profile Section -->
+   
+     
 
       <nav id="navmenu" class="navmenu">
         <ul>
-          <li><a href="#hero" class="active">Home</a></li>
-          <li><a href="#about">About</a></li>
-          <li><a href="#clients">Socials</a></li>
-          <li><a href="#portfolio">Creations</a></li>
+          <li><a href="index.html#hero" class="active">Home</a></li>
+          <li><a href="index.html#about">About</a></li>
+          <li><a href="index.html#clients">Socials</a></li>
+          <li><a href="index.html#portfolio">Creations</a></li>
 
       
         </ul>
@@ -56,26 +94,22 @@
       <a class="cta-btn" href="https://dsc.gg/opla/">Contact Us</a>
 
     </div>
+    
   </header>
 
  
 
 
-    <iframe class = "CHATFRAME" src="https://shapes.inc/opla-maya/chat" frameborder="0" scrolling="no">
+    <iframe class = "CHATFRAME" src="https://talk.shapes.inc/opla-maya" frameborder="0" scrolling="no">
     </iframe>
-    <div class="overlay">
-      <a href="index.html">  <button>Back To Home
-      </button></a>
-      <h3>OP la! - Chat with Maya 7</h3>
-    </div> <!-- This will hide the header -->
-
+    
  
 
   <footer id="footer2" class="footer2 dark-background">
     
       
   
-      <p>No <span>Copyright</span> <strong class="px-1 sitename">OP la! Game & AI Studio 2023-2025</strong> <span>No Rights Reserved - Maya Version 7.1 Web Edition. First Created on Oct 29 2021 (Discord Edition). Last Updated June 14 2025</span></p>
+      <p>No <span>Copyright</span> <strong class="px-1 sitename">OP la! Game & AI Studio 2023-2025</strong> <span>No Rights Reserved - OP Maya Version 7.1.0 Web Edition. First Created on Oct 29 2021 (Discord Edition). Last Updated June 19 2025</span></p>
     
    
 
