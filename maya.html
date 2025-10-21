@@ -14,6 +14,41 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 
     <style>
+
+        #discontinued-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background-color: rgba(0, 0, 0, 0.95);
+            z-index: 9999;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            pointer-events: all;
+            }
+
+            .discontinued-message {
+            color: white;
+            text-align: center;
+            max-width: 600px;
+            padding: 40px;
+            background-color: rgba(20, 20, 20, 0.9);
+            border-radius: 15px;
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.2);
+            }
+
+            .discontinued-message h1 {
+            font-size: 36px;
+            margin-bottom: 20px;
+            }
+
+            .discontinued-message p {
+            font-size: 18px;
+            line-height: 1.6;
+            }
+
         :root {
             --geo-bg-primary: #1A0000;
             --geo-bg-secondary: #3D0000;
@@ -217,7 +252,12 @@
     </style>
 </head>
 <body>
-
+      <div id="discontinued-overlay">
+    <div class="discontinued-message">
+      <h1>Maya Has Been Discontinued❤️‍🩹</h1>
+      <p>Maya(29 Oct 2021 - 21 Oct 2025) Has Been Discontinued. Thank you to all our amazing supporters who believed in Maya. We’re taking a break to rebuild something even better in the future. Stay tuned for what’s next!</p>
+    </div>
+  </div>
     <div id="geo-chat-app">
         <div id="geo-login-screen">
             <h1>Maya 7.4</h1>

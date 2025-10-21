@@ -49,6 +49,40 @@
       padding: 60px 0;
       text-align: center;
     }
+    #discontinued-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background-color: rgba(0, 0, 0, 0.95);
+      z-index: 9999;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      pointer-events: all;
+    }
+
+    .discontinued-message {
+      color: white;
+      text-align: center;
+      max-width: 600px;
+      padding: 40px;
+      background-color: rgba(20, 20, 20, 0.9);
+      border-radius: 15px;
+      box-shadow: 0 0 20px rgba(255, 255, 255, 0.2);
+    }
+
+    .discontinued-message h1 {
+      font-size: 36px;
+      margin-bottom: 20px;
+    }
+
+    .discontinued-message p {
+      font-size: 18px;
+      line-height: 1.6;
+    }
+
     .feature-box {
       background: rgb(58, 9, 122);
       padding: 20px;
@@ -61,6 +95,12 @@
 </head>
 
 <body>
+  <div id="discontinued-overlay">
+    <div class="discontinued-message">
+      <h1>GEO Has Been Discontinued❤️‍🩹</h1>
+      <p>GEO(Apr 1 2023 - 21 Oct 2025) Has Been Discontinued. Thank you to all our amazing supporters who believed in GEO. We’re taking a break to rebuild something even better in the future. Stay tuned for what’s next!</p>
+    </div>
+  </div>
 
   <!-- Hero Section -->
   <section class="hero">
