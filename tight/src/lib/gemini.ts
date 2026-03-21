@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from '@google/generative-ai'
+import { GoogleGenAI } from '@google/genai'
 
 export type Verdict = 'escaped' | 'failed' | 'worsened'
 
@@ -39,10 +39,13 @@ function clamp(n: number, min: number, max: number) {
   return Math.min(max, Math.max(min, n))
 }
 
-function isModelNotFoundError(err: unknown) {
-  const msg = String(err)
-  // The error you reported is a 404 with "models/<id> is not found".
-  return msg.includes('404') && msg.includes('models/') && /not found/i.test(msg)
+function getErrorMessage(err: unknown) {
+  return err instanceof Error ? err.message : String(err)
+}
+
+function isModelIdNotFound(err: unknown) {
+  const msg = getErrorMessage(err)
+  return /models\//i.test(msg) && /is not found/i.test(msg)
 }
 
 export async function getVerdict(
@@ -61,7 +64,6 @@ export async function getVerdict(
     )
   }
 
-  const genAI = new GoogleGenerativeAI(apiKey)
   const prompt = [
     'Scenario:',
     scenario,
@@ -72,29 +74,29 @@ export async function getVerdict(
     'Return ONLY valid JSON that matches the required schema.',
   ].join('\n')
 
-  const modelCandidates = [
-    // Prefer the “latest” variant first; your earlier error shows plain `gemini-1.5-flash` is not available.
-    'gemini-1.5-flash-latest',
-    'gemini-1.5-flash',
-    'gemini-1.5-flash-002',
-    'gemini-1.5-flash-8b',
-    'gemini-1.5-flash-8b-latest',
-  ]
+  const ai = new GoogleGenAI({ apiKey })
+
+  // Start with the model string you asked for.
+  const modelCandidates = ['gemini-2.5-flash', 'gemini-2.5-flash-latest']
 
   let lastErr: unknown = null
   for (const modelId of modelCandidates) {
     try {
-      const model = genAI.getGenerativeModel({
+      const response = await ai.models.generateContent({
         model: modelId,
-        systemInstruction: SYSTEM_INSTRUCTION,
+        contents: prompt,
+        config: {
+          systemInstruction: SYSTEM_INSTRUCTION,
+          // Gemini 2.5 thinkingBudget: -1 = automatic (model decides within limits).
+          thinkingConfig: { thinkingBudget: -1 },
+          responseMimeType: 'application/json',
+          temperature: 0.2,
+        },
       })
 
-      const result = await model.generateContent(prompt)
-      const rawText = result.response.text()
+      const rawText = response.text ?? ''
+      const parsed = extractJsonObject(rawText) as Partial<VerdictResponse> | null
 
-      const parsed = extractJsonObject(rawText) as
-        | Partial<VerdictResponse>
-        | null
       if (!parsed || typeof parsed !== 'object') {
         return {
           verdict: 'failed',
@@ -131,15 +133,13 @@ export async function getVerdict(
       }
     } catch (err) {
       lastErr = err
-      if (isModelNotFoundError(err)) continue
-      // For other errors (auth, quota, network), fail fast.
+      if (isModelIdNotFound(err)) continue
       throw err
     }
   }
 
-  // If we got here, none of the candidates worked.
   throw lastErr instanceof Error
     ? lastErr
-    : new Error('No Gemini 1.5 Flash model was available.')
+    : new Error('No Gemini 2.5 Flash model was available.')
 }
 
