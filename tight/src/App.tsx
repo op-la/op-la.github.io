@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { getVerdict, type ChatTurn, type NarrativeOutcome } from './lib/gemini'
+import { getStoryUpdate, type ChatTurn, type StoryStatus } from './lib/groq'
 
 type LogItem =
   | { id: string; role: 'user'; text: string }
@@ -9,7 +9,7 @@ type LogItem =
       text: string
       tension: number
       tensionChange: number
-      outcome?: NarrativeOutcome
+      outcome?: StoryStatus
     }
 
 function newId() {
@@ -36,7 +36,7 @@ export default function App() {
 
   const [apiKey, setApiKey] = useState(() => {
     try {
-      return localStorage.getItem('geminiApiKey') ?? ''
+      return localStorage.getItem('groqApiKey') ?? ''
     } catch {
       return ''
     }
@@ -48,7 +48,7 @@ export default function App() {
 
   const [tension, setTension] = useState(baseTension)
   const [isGameOver, setIsGameOver] = useState(false)
-  const [outcome, setOutcome] = useState<NarrativeOutcome | null>(null)
+  const [outcome, setOutcome] = useState<StoryStatus | null>(null)
 
   const [chatHistory, setChatHistory] = useState<ChatTurn[]>([])
   const [log, setLog] = useState<LogItem[]>([])
@@ -71,21 +71,25 @@ export default function App() {
     const initialTension = baseTension
     const initialChat: ChatTurn[] = [
       { role: 'system', text: `Tension is ${initialTension}%` },
+      {
+        role: 'system',
+        text: 'Start a fresh, unique, high-stakes social or legal dilemma now.',
+      },
     ]
 
     try {
-      const resp = await getVerdict(initialChat, '')
-      const nextTension = clamp(initialTension + resp.tensionChange, 0, 100)
+      const resp = await getStoryUpdate(initialChat)
+      const nextTension = clamp(resp.tension, 0, 100)
 
       const resolved =
         nextTension <= 0
           ? 'escaped'
-          : resp.outcome === 'escaped' || resp.outcome === 'caught'
-            ? resp.outcome
+          : resp.status === 'escaped' || resp.status === 'caught'
+            ? resp.status
             : null
 
       const ended =
-        nextTension <= 0 ? true : resp.isGameOver && resolved !== null
+        nextTension <= 0 ? true : resp.isGameOver || resolved !== null
 
       setTension(nextTension)
       setIsGameOver(ended)
@@ -96,7 +100,7 @@ export default function App() {
           role: 'narrator',
           text: resp.storyUpdate,
           tension: nextTension,
-          tensionChange: resp.tensionChange,
+          tensionChange: nextTension - initialTension,
           outcome: resolved ?? undefined,
         },
       ])
@@ -135,17 +139,19 @@ export default function App() {
     setIsGenerating(true)
 
     try {
-      const resp = await getVerdict(chatHistory, trimmed)
-      const nextTension = clamp(currentTension + resp.tensionChange, 0, 100)
+      const nextHistory = [...chatHistory, { role: 'user' as const, text: trimmed }]
+      const resp = await getStoryUpdate(nextHistory)
+      const nextTension = clamp(resp.tension, 0, 100)
+      const tensionDelta = nextTension - currentTension
 
       const resolved =
         nextTension <= 0
           ? 'escaped'
-          : resp.outcome === 'escaped' || resp.outcome === 'caught'
-            ? resp.outcome
+          : resp.status === 'escaped' || resp.status === 'caught'
+            ? resp.status
             : null
       const ended =
-        nextTension <= 0 ? true : resp.isGameOver && resolved !== null
+        nextTension <= 0 ? true : resp.isGameOver || resolved !== null
 
       setTension(nextTension)
       setIsGameOver(ended)
@@ -158,20 +164,16 @@ export default function App() {
           role: 'narrator',
           text: resp.storyUpdate,
           tension: nextTension,
-          tensionChange: resp.tensionChange,
+          tensionChange: tensionDelta,
           outcome: resolved ?? undefined,
         },
       ])
 
-      setChatHistory((prev) => {
-        const base = prev.length > 0 ? prev.slice(0, -1) : prev
-        return [
-          ...base,
-          { role: 'user', text: trimmed },
-          { role: 'narrator', text: resp.storyUpdate },
-          { role: 'system', text: `Tension is ${nextTension}%` },
-        ]
-      })
+      setChatHistory([
+        ...nextHistory,
+        { role: 'narrator', text: resp.storyUpdate },
+        { role: 'system', text: `Tension is ${nextTension}%` },
+      ])
     } catch (err) {
       const text = err instanceof Error ? err.message : 'Narrative failed.'
       setLog((prev) => [
@@ -368,12 +370,12 @@ export default function App() {
                     const next = e.target.value
                     setApiKey(next)
                     try {
-                      localStorage.setItem('geminiApiKey', next)
+                      localStorage.setItem('groqApiKey', next)
                     } catch {
                       // Ignore storage failures (private mode, etc.).
                     }
                   }}
-                  placeholder="Paste Gemini API key"
+                  placeholder="Paste Groq API key"
                   className="w-full bg-[#0b0c12] border border-[#242635] rounded-lg px-3 py-2 text-sm text-[#e5e7eb] placeholder:text-[#6b7280] focus:outline-none focus:ring-2 focus:ring-[#aa3bff]/40"
                 />
                 <div className="text-[11px] text-[#9ca3af]">
