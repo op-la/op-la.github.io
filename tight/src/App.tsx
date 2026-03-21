@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { getStoryUpdate, type ChatTurn, type StoryStatus } from './lib/groq'
 
 type LogItem =
@@ -33,6 +33,36 @@ export default function App() {
   const logRef = useRef<HTMLDivElement | null>(null)
 
   const baseTension = 50
+
+  const scenarioCategories = useMemo(
+    () => [
+      'mamak recording a fight (caught on camera)',
+      'viral food stall queue / cutting queue',
+      'overprotective brother misunderstanding',
+      'workplace being framed for a mistake',
+      'road rage with a steering lock',
+      'WhatsApp group scam accusation',
+      'online screenshot/DM scandal escalating',
+      'ad/conspiracy-style scapegoating or politics bait',
+      'taboo innuendo/rumor fallout with reputation panic',
+    ],
+    [],
+  )
+
+  const lastCategoryRef = useRef<string | null>(null)
+
+  function pickCategory(): string {
+    if (scenarioCategories.length <= 1) return scenarioCategories[0] ?? ''
+    const last = lastCategoryRef.current
+    let pick = scenarioCategories[Math.floor(Math.random() * scenarioCategories.length)] ?? ''
+    let tries = 0
+    while (pick === last && tries < 5) {
+      pick = scenarioCategories[Math.floor(Math.random() * scenarioCategories.length)] ?? ''
+      tries++
+    }
+    lastCategoryRef.current = pick
+    return pick
+  }
 
   const [apiKey, setApiKey] = useState(() => {
     try {
@@ -69,11 +99,16 @@ export default function App() {
     setIsGenerating(true)
 
     const initialTension = baseTension
+    const category = pickCategory()
     const initialChat: ChatTurn[] = [
       { role: 'system', text: `Tension is ${initialTension}%` },
       {
         role: 'system',
         text: 'Start a fresh, unique, high-stakes social or legal dilemma now.',
+      },
+      {
+        role: 'system',
+        text: `Scenario category: ${category}.`,
       },
     ]
 
