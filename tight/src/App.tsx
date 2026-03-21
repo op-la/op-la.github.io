@@ -1,59 +1,25 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { getVerdict, type Verdict } from './lib/gemini'
-
-type Scenario = {
-  id: string
-  description: string
-}
+import { useEffect, useRef, useState } from 'react'
+import { getVerdict, type ChatTurn, type NarrativeOutcome } from './lib/gemini'
 
 type LogItem =
-  | { id: string; role: 'system'; text: string }
   | { id: string; role: 'user'; text: string }
   | {
       id: string
-      role: 'judge'
-      verdict: Verdict
-      analysis: string
+      role: 'narrator'
+      text: string
       tension: number
+      tensionChange: number
+      outcome?: NarrativeOutcome
     }
-
-type GameState = {
-  scenario: Scenario
-  tension: number
-  messages: LogItem[]
-}
-
-const STARTING_SCENARIOS: Scenario[] = [
-  {
-    id: 'littering',
-    description:
-      'You are caught littering outside a convenience store. The clerk looks ready to escalate and someone nearby is filming.',
-  },
-  {
-    id: 'harassment-accused',
-    description:
-      'You are accused of harassment after a tense exchange. A bystander calls out your behavior and others are starting to gather.',
-  },
-  {
-    id: 'cornered-gang',
-    description:
-      'You are cornered by a gang in a dim parking lot. They think you disrespected them and are moving closer.',
-  },
-  {
-    id: 'contract-legal',
-    description:
-      'You realize you may have violated a simple community rule while trying to solve an urgent problem. The staff demand an explanation on the spot.',
-  },
-]
-
-function pickRandomScenario(): Scenario {
-  return STARTING_SCENARIOS[Math.floor(Math.random() * STARTING_SCENARIOS.length)]
-}
 
 function newId() {
   return typeof crypto !== 'undefined' && 'randomUUID' in crypto
     ? crypto.randomUUID()
     : String(Math.random()).slice(2)
+}
+
+function clamp(n: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, n))
 }
 
 function tensionColorClass(tension: number) {
@@ -66,23 +32,7 @@ export default function App() {
   const inputRef = useRef<HTMLTextAreaElement | null>(null)
   const logRef = useRef<HTMLDivElement | null>(null)
 
-  const initialGame = useMemo<GameState>(() => {
-    const scenario = pickRandomScenario()
-    const systemMsg: LogItem = {
-      id: newId(),
-      role: 'system',
-      text: scenario.description,
-    }
-    return {
-      scenario,
-      tension: 22,
-      messages: [systemMsg],
-    }
-  }, [])
-
-  const [game, setGame] = useState(initialGame)
-  const [action, setAction] = useState('')
-  const [isJudging, setIsJudging] = useState(false)
+  const baseTension = 50
 
   const [apiKey, setApiKey] = useState(() => {
     try {
@@ -93,69 +43,152 @@ export default function App() {
   })
   const [showSettings, setShowSettings] = useState(() => apiKey.length === 0)
 
+  const [isGenerating, setIsGenerating] = useState(false)
+  const [action, setAction] = useState('')
+
+  const [tension, setTension] = useState(baseTension)
+  const [isGameOver, setIsGameOver] = useState(false)
+  const [outcome, setOutcome] = useState<NarrativeOutcome | null>(null)
+
+  const [chatHistory, setChatHistory] = useState<ChatTurn[]>([])
+  const [log, setLog] = useState<LogItem[]>([])
+
   useEffect(() => {
     if (!logRef.current) return
-    // Keep the latest message in view.
     logRef.current.scrollTo({
       top: logRef.current.scrollHeight,
       behavior: 'smooth',
     })
-  }, [game.messages, isJudging])
+  }, [log.length, isGenerating])
 
-  function handleNewGame() {
-    const scenario = pickRandomScenario()
+  async function startNewGame() {
+    if (isGenerating) return
     setAction('')
-    setIsJudging(false)
-    setGame({
-      scenario,
-      tension: 22,
-      messages: [
-        { id: newId(), role: 'system' as const, text: scenario.description },
-      ],
-    })
-    requestAnimationFrame(() => inputRef.current?.focus())
+    setIsGameOver(false)
+    setOutcome(null)
+    setIsGenerating(true)
+
+    const initialTension = baseTension
+    const initialChat: ChatTurn[] = [
+      { role: 'system', text: `Tension is ${initialTension}%` },
+    ]
+
+    try {
+      const resp = await getVerdict(initialChat, '')
+      const nextTension = clamp(initialTension + resp.tensionChange, 0, 100)
+
+      const resolved =
+        nextTension <= 0
+          ? 'escaped'
+          : resp.outcome === 'escaped' || resp.outcome === 'caught'
+            ? resp.outcome
+            : null
+
+      const ended =
+        nextTension <= 0 ? true : resp.isGameOver && resolved !== null
+
+      setTension(nextTension)
+      setIsGameOver(ended)
+      setOutcome(resolved)
+      setLog([
+        {
+          id: newId(),
+          role: 'narrator',
+          text: resp.storyUpdate,
+          tension: nextTension,
+          tensionChange: resp.tensionChange,
+          outcome: resolved ?? undefined,
+        },
+      ])
+      setChatHistory([
+        { role: 'narrator', text: resp.storyUpdate },
+        { role: 'system', text: `Tension is ${nextTension}%` },
+      ])
+      requestAnimationFrame(() => inputRef.current?.focus())
+    } catch (err) {
+      const text = err instanceof Error ? err.message : 'Failed to start game.'
+      setLog([
+        {
+          id: newId(),
+          role: 'narrator',
+          text,
+          tension: baseTension,
+          tensionChange: 0,
+        },
+      ])
+      setChatHistory([{ role: 'system', text: `Tension is ${baseTension}%` }])
+      setTension(baseTension)
+      setIsGameOver(false)
+      setOutcome(null)
+    } finally {
+      setIsGenerating(false)
+    }
   }
 
   async function handleSubmit() {
     const trimmed = action.trim()
-    if (!trimmed || isJudging) return
+    if (!trimmed || isGenerating || isGameOver) return
 
-    const scenarioText = game.scenario.description
-    const userMsg: LogItem = { id: newId(), role: 'user', text: trimmed }
-
-    setIsJudging(true)
-    setGame((prev) => ({ ...prev, messages: [...prev.messages, userMsg] }))
+    const currentTension = tension
     setAction('')
+    setLog((prev) => [...prev, { id: newId(), role: 'user', text: trimmed }])
+    setIsGenerating(true)
 
     try {
-      const verdict = await getVerdict(scenarioText, trimmed)
-      setGame((prev) => ({
+      const resp = await getVerdict(chatHistory, trimmed)
+      const nextTension = clamp(currentTension + resp.tensionChange, 0, 100)
+
+      const resolved =
+        nextTension <= 0
+          ? 'escaped'
+          : resp.outcome === 'escaped' || resp.outcome === 'caught'
+            ? resp.outcome
+            : null
+      const ended =
+        nextTension <= 0 ? true : resp.isGameOver && resolved !== null
+
+      setTension(nextTension)
+      setIsGameOver(ended)
+      setOutcome(resolved)
+
+      setLog((prev) => [
         ...prev,
-        tension: verdict.tension,
-        messages: [
-          ...prev.messages,
-          {
-            id: newId(),
-            role: 'judge',
-            verdict: verdict.verdict,
-            analysis: verdict.analysis,
-            tension: verdict.tension,
-          },
-        ],
-      }))
+        {
+          id: newId(),
+          role: 'narrator',
+          text: resp.storyUpdate,
+          tension: nextTension,
+          tensionChange: resp.tensionChange,
+          outcome: resolved ?? undefined,
+        },
+      ])
+
+      setChatHistory((prev) => {
+        const base = prev.length > 0 ? prev.slice(0, -1) : prev
+        return [
+          ...base,
+          { role: 'user', text: trimmed },
+          { role: 'narrator', text: resp.storyUpdate },
+          { role: 'system', text: `Tension is ${nextTension}%` },
+        ]
+      })
     } catch (err) {
-      const text = err instanceof Error ? err.message : 'Judge failed.'
-      setGame((prev) => ({
+      const text = err instanceof Error ? err.message : 'Narrative failed.'
+      setLog((prev) => [
         ...prev,
-        messages: [...prev.messages, { id: newId(), role: 'system', text }],
-      }))
+        {
+          id: newId(),
+          role: 'narrator',
+          text,
+          tension: currentTension,
+          tensionChange: 0,
+        },
+      ])
     } finally {
-      setIsJudging(false)
+      setIsGenerating(false)
       requestAnimationFrame(() => inputRef.current?.focus())
     }
   }
-
-  const tension = game.tension
 
   return (
     <div className="w-full min-h-[100svh] bg-[#0b0b10] text-[#e5e7eb] flex flex-col items-center">
@@ -166,8 +199,9 @@ export default function App() {
           </div>
           <button
             type="button"
-            onClick={handleNewGame}
-            className="px-3 py-2 rounded-lg bg-[#161827] border border-[#242635] text-sm hover:bg-[#1b1c30] transition"
+            onClick={() => void startNewGame()}
+            disabled={isGenerating}
+            className="px-3 py-2 rounded-lg bg-[#161827] border border-[#242635] text-sm hover:bg-[#1b1c30] transition disabled:opacity-60 disabled:cursor-not-allowed"
           >
             New Game
           </button>
@@ -189,18 +223,27 @@ export default function App() {
         <div className="flex-1 border border-[#242635] bg-[#0f1017] rounded-lg overflow-hidden flex flex-col">
           <div className="px-4 py-3 border-b border-[#242635]">
             <div className="text-xs uppercase tracking-widest text-[#9ca3af]">
-              Scenario
+              Scenario Log
             </div>
-            <div className="mt-1 text-sm text-[#e5e7eb] leading-relaxed">
-              {game.scenario.description}
-            </div>
+            {isGameOver && outcome && (
+              <div className="mt-1 text-sm text-[#e5e7eb] leading-relaxed">
+                Game over: {outcome.toUpperCase()}
+              </div>
+            )}
           </div>
 
           <div
             ref={logRef}
             className="flex-1 overflow-y-auto px-4 py-3 flex flex-col gap-3"
           >
-            {game.messages.map((m) => {
+            {log.length === 0 && (
+              <div className="text-sm text-[#9ca3af] py-8 text-center">
+                Click <span className="font-semibold text-[#e5e7eb]">New Game</span>{' '}
+                to generate a scenario.
+              </div>
+            )}
+
+            {log.map((m) => {
               if (m.role === 'user') {
                 return (
                   <div key={m.id} className="flex justify-end">
@@ -216,47 +259,39 @@ export default function App() {
                 )
               }
 
-              if (m.role === 'judge') {
-                const badge =
-                  m.verdict === 'escaped'
-                    ? 'bg-emerald-500/15 border-emerald-400/40 text-emerald-100'
-                    : m.verdict === 'worsened'
-                      ? 'bg-rose-500/15 border-rose-400/40 text-rose-100'
-                      : 'bg-amber-500/15 border-amber-400/40 text-amber-100'
+              const badge =
+                m.outcome === 'escaped'
+                  ? 'bg-emerald-500/15 border-emerald-400/40 text-emerald-100'
+                  : m.outcome === 'caught'
+                    ? 'bg-rose-500/15 border-rose-400/40 text-rose-100'
+                    : 'bg-amber-500/15 border-amber-400/40 text-amber-100'
 
-                return (
-                  <div key={m.id} className="flex justify-start">
-                    <div className="max-w-[85%] bg-[#0c0d14] border border-[#242635] rounded-lg px-3 py-2">
-                      <div className="flex items-center gap-2 mb-1">
-                        <div className="text-[11px] uppercase tracking-widest text-[#9ca3af]">
-                          Judge
-                        </div>
+              return (
+                <div key={m.id} className="flex justify-start">
+                  <div className="max-w-[85%] bg-[#0c0d14] border border-[#242635] rounded-lg px-3 py-2">
+                    <div className="flex items-center gap-2 mb-1">
+                      <div className="text-[11px] uppercase tracking-widest text-[#9ca3af]">
+                        Narrative Director
+                      </div>
+                      {m.outcome ? (
                         <span
                           className={`px-2 py-0.5 text-[11px] rounded-md border ${badge}`}
                         >
-                          {m.verdict.toUpperCase()}
+                          {m.outcome.toUpperCase()}
                         </span>
-                      </div>
-                      <div className="text-sm text-[#e5e7eb] leading-relaxed whitespace-pre-wrap">
-                        {m.analysis}
-                      </div>
-                      <div className="mt-2 text-[11px] text-[#9ca3af]">
-                        Tension: {Math.round(m.tension)}%
-                      </div>
-                    </div>
-                  </div>
-                )
-              }
-
-              // system
-              return (
-                <div key={m.id} className="flex justify-center">
-                  <div className="w-full max-w-[90%] bg-[#0c0d14] border border-[#242635] rounded-lg px-3 py-2 text-center">
-                    <div className="text-[11px] uppercase tracking-widest text-[#9ca3af] mb-1">
-                      System
+                      ) : (
+                        <span className="px-2 py-0.5 text-[11px] rounded-md border border-[#242635] text-[#9ca3af]">
+                          ONGOING
+                        </span>
+                      )}
                     </div>
                     <div className="text-sm text-[#e5e7eb] leading-relaxed whitespace-pre-wrap">
                       {m.text}
+                    </div>
+                    <div className="mt-2 text-[11px] text-[#9ca3af]">
+                      Tension: {Math.round(m.tension)}% (
+                      {m.tensionChange >= 0 ? '+' : ''}
+                      {Math.round(m.tensionChange)}%)
                     </div>
                   </div>
                 </div>
@@ -276,16 +311,21 @@ export default function App() {
                 ref={inputRef}
                 value={action}
                 onChange={(e) => setAction(e.target.value)}
-                placeholder="Type your escape attempt..."
+                placeholder={
+                  isGameOver
+                    ? 'Game over. Start a new game...'
+                    : 'What do you do next? (Type your move)'
+                }
                 rows={2}
-                className="flex-1 bg-[#0b0c12] border border-[#242635] rounded-lg px-3 py-2 text-sm text-[#e5e7eb] placeholder:text-[#6b7280] focus:outline-none focus:ring-2 focus:ring-[#aa3bff]/40 resize-none"
+                disabled={isGenerating || isGameOver}
+                className="flex-1 bg-[#0b0c12] border border-[#242635] rounded-lg px-3 py-2 text-sm text-[#e5e7eb] placeholder:text-[#6b7280] focus:outline-none focus:ring-2 focus:ring-[#aa3bff]/40 resize-none disabled:opacity-60 disabled:cursor-not-allowed"
               />
               <button
                 type="submit"
-                disabled={isJudging}
+                disabled={isGenerating || isGameOver}
                 className="px-3 py-2 rounded-lg bg-[#2b2c44] border border-[#3a3b5c] text-sm hover:bg-[#34354f] transition disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                {isJudging ? 'Judging...' : 'Send'}
+                {isGenerating ? 'Thinking...' : 'Send'}
               </button>
             </form>
 

@@ -1,15 +1,21 @@
 import { GoogleGenAI } from '@google/genai'
 
-export type Verdict = 'escaped' | 'failed' | 'worsened'
+export type NarrativeOutcome = 'escaped' | 'caught' | 'ongoing'
 
-export type VerdictResponse = {
-  verdict: Verdict
-  analysis: string
-  tension: number
+export type NarrativeResponse = {
+  storyUpdate: string
+  tensionChange: number
+  isGameOver: boolean
+  outcome: NarrativeOutcome
+}
+
+export type ChatTurn = {
+  role: 'system' | 'user' | 'narrator'
+  text: string
 }
 
 const SYSTEM_INSTRUCTION =
-  'You are a cynical, logical judge of social and legal consequences. The user is in a "Tight Spot" (e.g., caught littering, accused of harassment, cornered by a gang). If their escape attempt is logically weak or socially unacceptable, punish them. Only clever, de-escalating, or physically sound logic allows escape. Respond in JSON: { "verdict": "escaped" | "failed" | "worsened", "analysis": "string", "tension": number }'
+  "You are a ruthless Narrative Director. Your goal is to keep the user in a \"Tight Spot\". Every response must end with a prompt for the user's next move. If they escape, the game ends. If they are caught/jailed, the game ends. Otherwise, describe the unfolding chaos."
 
 function extractJsonObject(text: string): unknown {
   const trimmed = text.trim()
@@ -48,38 +54,77 @@ function isModelIdNotFound(err: unknown) {
   return /models\//i.test(msg) && /is not found/i.test(msg)
 }
 
+function serializeChatHistory(chatHistory: ChatTurn[]) {
+  // Keep this compact but sufficient to preserve world state.
+  return chatHistory
+    .map((turn) => {
+      const role =
+        turn.role === 'narrator'
+          ? 'Narrator'
+          : turn.role === 'user'
+            ? 'User'
+            : 'System'
+      return `${role}: ${turn.text}`
+    })
+    .join('\n')
+}
+
+const RESPONSE_JSON_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    storyUpdate: { type: 'string' },
+    tensionChange: { type: 'number' },
+    isGameOver: { type: 'boolean' },
+    outcome: { type: 'string', enum: ['escaped', 'caught', 'ongoing'] },
+  },
+  required: ['storyUpdate', 'tensionChange', 'isGameOver', 'outcome'],
+} as const
+
 export async function getVerdict(
-  scenario: string,
+  chatHistory: ChatTurn[],
   userAction: string,
-): Promise<VerdictResponse> {
+): Promise<NarrativeResponse> {
   let apiKey = ''
   try {
     apiKey = localStorage.getItem('geminiApiKey')?.trim() ?? ''
   } catch {
     apiKey = ''
   }
+
   if (!apiKey) {
     throw new Error(
       'Missing Gemini API key. Open Settings at the bottom and paste your key.',
     )
   }
 
-  const prompt = [
-    'Scenario:',
-    scenario,
-    '',
-    'User escape attempt:',
-    userAction,
-    '',
-    'Return ONLY valid JSON that matches the required schema.',
-  ].join('\n')
-
   const ai = new GoogleGenAI({ apiKey })
 
-  // Start with the model string you asked for.
-  const modelCandidates = ['gemini-2.5-flash', 'gemini-2.5-flash-latest']
+  const isFirstTurn = !userAction.trim()
+  const historyText = serializeChatHistory(chatHistory)
 
+  const prompt = [
+    'World state so far (verbatim):',
+    historyText || '(empty)',
+    '',
+    isFirstTurn
+      ? 'Generate a highly specific, high-stakes social or legal dilemma (a "Tight Spot") with no easy "correct" answer. The user should feel cornered and escape should require clever, de-escalating, or physically sound logic. Use concrete details and set up what happens next.'
+      : '',
+    isFirstTurn ? '' : 'User next move:',
+    isFirstTurn ? '' : userAction,
+    '',
+    'Update the narrative based on the user next move (or generate the opening if first turn). If the user\'s action makes things worse, describe escalation and spreading consequences. Keep continuity with the provided world state.',
+    '',
+    'Return ONLY JSON with the schema:',
+    '{ "storyUpdate": string, "tensionChange": number, "isGameOver": boolean, "outcome": "escaped" | "caught" | "ongoing" }',
+    'The "storyUpdate" string MUST end with a prompt asking for the user\'s next move.',
+  ]
+    .filter(Boolean)
+    .join('\n')
+
+  const modelCandidates = ['gemini-2.5-flash', 'gemini-2.5-flash-latest']
   let lastErr: unknown = null
+
   for (const modelId of modelCandidates) {
     try {
       const response = await ai.models.generateContent({
@@ -87,49 +132,51 @@ export async function getVerdict(
         contents: prompt,
         config: {
           systemInstruction: SYSTEM_INSTRUCTION,
-          // Gemini 2.5 thinkingBudget: -1 = automatic (model decides within limits).
+          // thinkingBudget is supported for Gemini 2.5 models.
           thinkingConfig: { thinkingBudget: -1 },
           responseMimeType: 'application/json',
-          temperature: 0.2,
+          responseJsonSchema: RESPONSE_JSON_SCHEMA,
         },
       })
 
       const rawText = response.text ?? ''
-      const parsed = extractJsonObject(rawText) as Partial<VerdictResponse> | null
+      const parsed = extractJsonObject(rawText) as Partial<NarrativeResponse> | null
 
       if (!parsed || typeof parsed !== 'object') {
         return {
-          verdict: 'failed',
-          analysis:
-            'The judge returned an unreadable response. Provide a clearer action attempt.',
-          tension: 60,
+          storyUpdate:
+            'The Narrative Director failed to produce a valid update. Try a different action. What will you do next?',
+          tensionChange: 0,
+          isGameOver: false,
+          outcome: 'ongoing',
         }
       }
 
-      const verdictCandidateRaw = (parsed as { verdict?: unknown }).verdict
-      const verdictCandidate =
-        typeof verdictCandidateRaw === 'string'
-          ? verdictCandidateRaw.toLowerCase().trim()
-          : ''
-      const verdictValues: Verdict[] = ['escaped', 'failed', 'worsened']
-      const verdict = verdictValues.includes(verdictCandidate as Verdict)
-        ? (verdictCandidate as Verdict)
-        : 'failed'
+      const storyUpdate =
+        typeof parsed.storyUpdate === 'string' ? parsed.storyUpdate : ''
 
-      const analysisCandidate = (parsed as { analysis?: unknown }).analysis
-      const analysis =
-        typeof analysisCandidate === 'string' ? analysisCandidate : ''
+      const tensionChangeRaw = parsed.tensionChange
+      const tensionChange =
+        typeof tensionChangeRaw === 'number'
+          ? tensionChangeRaw
+          : Number(tensionChangeRaw)
 
-      const tensionCandidate = (parsed as { tension?: unknown }).tension
-      const tensionNum =
-        typeof tensionCandidate === 'number'
-          ? tensionCandidate
-          : Number(tensionCandidate)
+      const isGameOver =
+        typeof parsed.isGameOver === 'boolean' ? parsed.isGameOver : false
+
+      const outcomeRaw = parsed.outcome
+      const outcome =
+        outcomeRaw === 'escaped' || outcomeRaw === 'caught' || outcomeRaw === 'ongoing'
+          ? outcomeRaw
+          : 'ongoing'
 
       return {
-        verdict,
-        analysis: analysis || 'No analysis returned by the judge.',
-        tension: Number.isFinite(tensionNum) ? clamp(tensionNum, 0, 100) : 50,
+        storyUpdate: storyUpdate || 'What will you do next?',
+        tensionChange: Number.isFinite(tensionChange)
+          ? clamp(tensionChange, -100, 100)
+          : 0,
+        isGameOver,
+        outcome,
       }
     } catch (err) {
       lastErr = err
